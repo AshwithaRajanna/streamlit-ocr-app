@@ -1,6 +1,7 @@
+apt-get install -y libgl1-mesa-glx
 streamlit
 opencv-python
 numpy
 paddleocr
 Pillow
-base64
+
