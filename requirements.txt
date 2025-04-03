@@ -1,7 +1,8 @@
-streamlit
-pillow
-paddleocr
-numpy
 opencv-python-headless
-paddlepaddle
+paddleocr
+streamlit
+numpy
+pillow
+base64
+
 
