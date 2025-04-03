@@ -1,9 +1,8 @@
 import streamlit as st
-import cv2
 import numpy as np
 import base64
 from paddleocr import PaddleOCR
-from PIL import Image
+from PIL import Image  # Replaces cv2
 import io
 
 # Set Page Configuration
@@ -21,14 +20,15 @@ uploaded_file = st.file_uploader("Upload an image or paste one here", type=["png
 if uploaded_file is not None:
     # Read image from uploaded file
     image = Image.open(uploaded_file)
-    image = np.array(image)
+    image = image.convert("RGB")  # Ensures compatibility
 
-    # Convert image to OpenCV format
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    # Convert image to NumPy array
+    image_np = np.array(image)
 
     # Convert image to Base64 for displaying
-    _, buffer = cv2.imencode(".png", image_rgb)
-    image_base64 = base64.b64encode(buffer).decode("utf-8")
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
     image_src = f"data:image/png;base64,{image_base64}"
 
     # Display Image in Streamlit
@@ -38,7 +38,7 @@ if uploaded_file is not None:
     ocr = PaddleOCR(use_angle_cls=True, lang="en")
 
     # Perform OCR
-    result = ocr.ocr(np.array(image), cls=True)
+    result = ocr.ocr(image_np, cls=True)
 
     # Function to sort OCR results for better formatting
     def sort_ocr_results(results):
@@ -48,7 +48,7 @@ if uploaded_file is not None:
     # Sort OCR output
     sorted_result = sort_ocr_results([line for res in result for line in res])
 
-    # Extract structured text in original image format
+    # Extract structured text
     extracted_text = ""
 
     i = 0
@@ -70,4 +70,3 @@ if uploaded_file is not None:
 
     # Download button for extracted text
     st.download_button("Download Extracted Text", extracted_text, file_name="ocr_text.txt")
-
