@@ -1,72 +1,81 @@
-import streamlit as st
-import numpy as np
-import base64
 from paddleocr import PaddleOCR
-from PIL import Image  # Replaces cv2
-import io
+import cv2
+import numpy as np
+from google.colab import files
+from IPython.core.display import display, HTML
+import base64
 
-# Set Page Configuration
-st.set_page_config(page_title="OCR App", layout="wide")
+# Upload Image
+uploaded = files.upload()
+image_path = list(uploaded.keys())[0]
 
-# Title of the App
-st.title("📝 Extract Text from Images using PaddleOCR")
+# Read and preprocess image
+image = cv2.imread(image_path)
+image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-# Instructions
-st.markdown("📌 **Paste an Image (CTRL + V) or Upload a File Below**")
+# Convert image to Base64 for HTML display
+_, buffer = cv2.imencode(".png", image_rgb)
+image_base64 = base64.b64encode(buffer).decode("utf-8")
+image_src = f"data:image/png;base64,{image_base64}"
 
-# File Uploader (CTRL + V paste option enabled)
-uploaded_file = st.file_uploader("Upload an image or paste one here", type=["png", "jpg", "jpeg"])
+# Initialize PaddleOCR
+ocr = PaddleOCR(use_angle_cls=True, lang="en")
 
-if uploaded_file is not None:
-    # Read image from uploaded file
-    image = Image.open(uploaded_file)
-    image = image.convert("RGB")  # Ensures compatibility
+# Perform OCR
+result = ocr.ocr(image_path, cls=True)
 
-    # Convert image to NumPy array
-    image_np = np.array(image)
+# Function to sort OCR results for better formatting
+def sort_ocr_results(results):
+    """Sorts OCR results in reading order (top to bottom, left to right)."""
+    return sorted(results, key=lambda x: (x[0][0][1], x[0][0][0]))  # Sort by Y first, then X
 
-    # Convert image to Base64 for displaying
-    buffered = io.BytesIO()
-    image.save(buffered, format="PNG")
-    image_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-    image_src = f"data:image/png;base64,{image_base64}"
+# Sort OCR output
+sorted_result = sort_ocr_results([line for res in result for line in res])
 
-    # Display Image in Streamlit
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+# Extract text in structured format like original image
+formatted_text = "<pre>"
 
-    # Initialize PaddleOCR
-    ocr = PaddleOCR(use_angle_cls=True, lang="en")
+i = 0
+while i < len(sorted_result):
+    left_col = sorted_result[i][1][0]  # Extract first part (field name)
+    right_col = ""
+    i += 1
 
-    # Perform OCR
-    result = ocr.ocr(image_np, cls=True)
-
-    # Function to sort OCR results for better formatting
-    def sort_ocr_results(results):
-        """Sorts OCR results in reading order (top to bottom, left to right)."""
-        return sorted(results, key=lambda x: (x[0][0][1], x[0][0][0]))  # Sort by Y first, then X
-
-    # Sort OCR output
-    sorted_result = sort_ocr_results([line for res in result for line in res])
-
-    # Extract structured text
-    extracted_text = ""
-
-    i = 0
-    while i < len(sorted_result):
-        left_col = sorted_result[i][1][0]  # Extract field name
-        right_col = ""
+    # Handle multi-line values
+    while i < len(sorted_result) and sorted_result[i][0][0][0] > sorted_result[i-1][0][1][0]:
+        right_col += " " + sorted_result[i][1][0]
         i += 1
 
-        # Handle multi-line values
-        while i < len(sorted_result) and sorted_result[i][0][0][0] > sorted_result[i - 1][0][1][0]:
-            right_col += " " + sorted_result[i][1][0]
-            i += 1
+    formatted_text += f"{left_col.ljust(20)} {right_col.strip()}\n"
 
-        extracted_text += f"{left_col.ljust(20)} {right_col.strip()}\n"
+formatted_text += "</pre>"
 
-    # Display OCR extracted text in a formatted way
-    st.subheader("📄 Extracted Text:")
-    st.text_area("Text Output", value=extracted_text, height=300)
+# Create an HTML layout for displaying the image and formatted text
+html_code = f"""
+    <style>
+        .text-container {{
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-family: monospace;
+            background-color: #fff;
+            outline: none;
+            width: 100%;
+            white-space: pre;
+        }}
+    </style>
 
-    # Download button for extracted text
-    st.download_button("Download Extracted Text", extracted_text, file_name="ocr_text.txt")
+    <div style="display: flex; align-items: flex-start;">
+        <div style="flex: 1;">
+            <img src="{image_src}" width="500">
+        </div>
+        <div style="flex: 1; padding-left: 20px;">
+            <h3>Extracted Information</h3>
+            <div contenteditable="true" class="text-container">
+                {formatted_text}
+            </div>
+        </div>
+    </div>
+"""
+
+# Display formatted output
+display(HTML(html_code))
